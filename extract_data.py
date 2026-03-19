@@ -1,9 +1,16 @@
 import re
 import csv
 import PyPDF2
+import gdown
+import os
+
+def download_from_drive(file_id, output_path):
+    print(f"Downloading file from Google Drive...")
+    url = f'https://drive.google.com/uc?id={file_id}'
+    gdown.download(url, output_path, quiet=False)
+    print("Download complete.")
 
 def parse_pdf_to_csv(pdf_path, csv_path):
-    # Define the headers for your CSV
     headers = [
         "Name", "Designation", "Mobile Number", "Trainee Code", 
         "Training Venue", "Training Date", "Training Time", 
@@ -13,36 +20,21 @@ def parse_pdf_to_csv(pdf_path, csv_path):
     
     data_rows = []
     
-    # Open the PDF file
     with open(pdf_path, 'rb') as file:
         reader = PyPDF2.PdfReader(file)
         
-        # Iterate through every page
         for page in reader.pages:
             text = page.extract_text()
             if not text:
                 continue
                 
-            # Regex patterns to extract specific fields
-            # Name, Designation, and Mobile
             name_match = re.search(r'Name of.*?Officer\s+(.*?),\s*(.*?),\s*MOBILE NO:\s*(\d+)', text, re.IGNORECASE)
-            
-            # Trainee Code
             trainee_match = re.search(r'Trainee Code:\s*([A-Z0-9\-]+/\d+)', text)
-            
-            # Training Venue, Date, and Time
             venue_match = re.search(r'Venue & Address\s*Date & Time\s*(.*?)\s+(\d{2}/\d{2}/\d{4})\s+(\d{2}:\d{2}\s*[AP]M\s*to\s*\d{2}:\d{2}\s*[AP]M)', text, re.DOTALL)
-            
-            # EPIC, Part No, Sl No
             epic_match = re.search(r'EPIC No\.\s*-\s*([A-Z0-9]+).*?Part No\.\s*-\s*(\d+).*?Sl\. No\.\s*-\s*(\d+)', text, re.DOTALL)
-            
-            # Assembly Constituency
             assembly_match = re.search(r'Permanent Assembly Constituency\s*-\s*(.*)', text)
-            
-            # Account No and IFSC
             bank_match = re.search(r'A/c No\.\s*-\s*(\d+).*?IFSC\s*-\s*([A-Z0-9]+)', text, re.DOTALL)
             
-            # If a name is found, it's a valid appointment letter page
             if name_match:
                 venue_text = venue_match.group(1).strip().replace('\n', ' ') if venue_match else ""
                 
@@ -63,7 +55,6 @@ def parse_pdf_to_csv(pdf_path, csv_path):
                 }
                 data_rows.append(row)
                 
-    # Write the extracted data to data.csv
     with open(csv_path, 'w', newline='', encoding='utf-8') as csv_file:
         writer = csv.DictWriter(csv_file, fieldnames=headers)
         writer.writeheader()
@@ -71,5 +62,18 @@ def parse_pdf_to_csv(pdf_path, csv_path):
         print(f"Successfully extracted {len(data_rows)} records to {csv_path}")
 
 if __name__ == "__main__":
-    # Expects the PDF to be in the same folder, outputs to data.csv
-    parse_pdf_to_csv('appointment_letters.pdf', 'data.csv')
+    # The file ID extracted from your shareable link
+    DRIVE_FILE_ID = '1iRD1LrKu_oOLPos0UEBSqzFFnjp7XFfJ'
+    LOCAL_PDF_PATH = 'temp_appointment_letters.pdf'
+    OUTPUT_CSV_PATH = 'data.csv'
+    
+    # 1. Download the file
+    download_from_drive(DRIVE_FILE_ID, LOCAL_PDF_PATH)
+    
+    # 2. Parse it and save to CSV
+    if os.path.exists(LOCAL_PDF_PATH):
+        parse_pdf_to_csv(LOCAL_PDF_PATH, OUTPUT_CSV_PATH)
+        # Optional: Clean up the downloaded PDF so it doesn't get committed
+        os.remove(LOCAL_PDF_PATH)
+    else:
+        print("Error: PDF file was not downloaded successfully.")
