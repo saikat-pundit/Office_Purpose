@@ -33,16 +33,12 @@ def parse_pdf_to_csv(pdf_path, csv_path):
             order_match = re.search(r'Order No:\s*(.*?)\s+Date:\s*([0-9\-]+)', text)
             office_match = re.search(r'OFFICE DETAILS\s*-\s*(.*?)\nPost Status\s*-\s*([^\n]+)', text, re.DOTALL)
             
-            # Training Details extraction
+            # --- FIXED: Training Details ---
             training_name_match = re.search(r'Training Schedule\s*(?:Training)?\s*(.*?)\s*Trainee Code:', text, re.DOTALL)
             trainee_match = re.search(r'Trainee Code:\s*([A-Z0-9\-]+/\d+)', text)
             
-            # FIXED: We now use the extracted Trainee Code as an anchor to reliably find the Venue and Date, 
-            # bypassing the floating "Date & Time" headers entirely.
-            venue_match = None
-            if trainee_match:
-                trainee_code = trainee_match.group(1)
-                venue_match = re.search(rf'{re.escape(trainee_code)}\s+(.*?)\s+(\d{{2}}/\d{{2}}/\d{{4}})\s+(\d{{2}}:\d{{2}}\s*[AP]M\s*to\s*\d{{2}}:\d{{2}}\s*[AP]M)', text, re.DOTALL)
+            # Grabs everything directly between the Trainee Code format and the Date format
+            venue_match = re.search(r'Trainee Code:\s*[A-Z0-9\-]+/\d+\s*(.*?)\s+(\d{2}/\d{2}/\d{4})\s+(\d{2}:\d{2}\s*[AP]M\s*to\s*\d{2}:\d{2}\s*[AP]M)', text, re.DOTALL)
             
             epic_match = re.search(r'EPIC No\.\s*-\s*([A-Z0-9/]+).*?Part No\.\s*-\s*(\d+).*?Sl\. No\.\s*-\s*(\d+)', text, re.DOTALL)
             assembly_match = re.search(r'Permanent Assembly Constituency\s*-\s*([A-Z\s()]+)', text)
@@ -51,13 +47,18 @@ def parse_pdf_to_csv(pdf_path, csv_path):
             if name_match:
                 office_text = office_match.group(1).strip().replace('\n', ' ') if office_match else ""
                 
-                # Clean up stray floating table headers from the Training Name
+                # Forcefully strip out the out-of-order headers PyPDF2 generated
                 raw_training_name = training_name_match.group(1) if training_name_match else ""
-                clean_training_name = re.sub(r'(?i)(?:Venue\s*&\s*Address|Date\s*&\s*Time)\s*', '', raw_training_name).strip()
+                clean_training_name = raw_training_name.replace('Venue & Address', '').replace('Date & Time', '').strip()
                 
-                # Clean up stray floating table headers from the Venue
-                raw_venue = venue_match.group(1) if venue_match else ""
-                clean_venue = re.sub(r'(?i)(?:Venue\s*&\s*Address|Date\s*&\s*Time)\s*', '', raw_venue).strip().replace('\n', ', ')
+                # Apply the same forceful strip to the venue just in case they appear there on other pages
+                if venue_match:
+                    raw_venue = venue_match.group(1)
+                    clean_venue = raw_venue.replace('Venue & Address', '').replace('Date & Time', '').strip().replace('\n', ', ')
+                    training_date = venue_match.group(2).strip()
+                    training_time = venue_match.group(3).strip()
+                else:
+                    clean_venue, training_date, training_time = "", "", ""
                 
                 row = {
                     "Name": name_match.group(1).strip(),
@@ -70,8 +71,8 @@ def parse_pdf_to_csv(pdf_path, csv_path):
                     "Training Name": clean_training_name,
                     "Trainee Code": trainee_match.group(1).strip() if trainee_match else "",
                     "Training Venue": clean_venue,
-                    "Training Date": venue_match.group(2).strip() if venue_match else "",
-                    "Training Time": venue_match.group(3).strip() if venue_match else "",
+                    "Training Date": training_date,
+                    "Training Time": training_time,
                     "EPIC No": epic_match.group(1).strip() if epic_match else "",
                     "Part No": epic_match.group(2).strip() if epic_match else "",
                     "Sl No": epic_match.group(3).strip() if epic_match else "",
