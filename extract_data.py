@@ -5,13 +5,16 @@ import gdown
 import os
 
 def download_from_drive(file_id, output_path):
+    # Explainer: This function uses the 'gdown' library to bypass Google Drive's 
+    # large file warnings and download the PDF directly to the GitHub Actions runner.
     print(f"Downloading file from Google Drive...")
     url = f'https://drive.google.com/uc?id={file_id}'
     gdown.download(url, output_path, quiet=False)
     print("Download complete.")
 
 def parse_pdf_to_csv(pdf_path, csv_path):
-    # Added new headers for all the additional details
+    # Explainer: These are the exact column headers that will appear in your CSV file.
+    # Notice "Order No" and "Order Date" are included here.
     headers = [
         "Name", "Designation", "Mobile Number", "Order No", "Order Date", 
         "Office Details", "Post Status", "Training Name", "Trainee Code", 
@@ -25,41 +28,56 @@ def parse_pdf_to_csv(pdf_path, csv_path):
     with open(pdf_path, 'rb') as file:
         reader = PyPDF2.PdfReader(file)
         
+        # Explainer: We loop through every single page of the 78-page PDF.
         for page in reader.pages:
             text = page.extract_text()
             if not text:
                 continue
                 
             # 1. Name, Designation, and Mobile
+            # Explainer: Looks for "Name of X Officer", captures the Name, Designation, and the digits after "MOBILE NO:".
             name_match = re.search(r'Name of.*?Officer\s+(.*?),\s*(.*?),\s*MOBILE NO:\s*(\d+)', text, re.IGNORECASE)
             
             # 2. Order No and Date
+            # Explainer: This captures everything after "Order No:" up to the line break (group 1), 
+            # and everything after "Date:" on the next line (group 2).
             order_match = re.search(r'Order No:\s*(.*?)\nDate:\s*([^\n]+)', text)
             
             # 3. Office Details and Post Status
+            # Explainer: Captures the multi-line office address, stopping when it sees "Post Status -".
             office_match = re.search(r'OFFICE DETAILS\s*-\s*(.*?)\nPost Status\s*-\s*([^\n]+)', text, re.DOTALL)
             
             # 4. Training Details
+            # Explainer: Grabs the specific training name (e.g., "1st Training for Male PP WBLA 2026").
             training_name_match = re.search(r'Training\n([^\n]+)\nTrainee Code:', text)
             trainee_match = re.search(r'Trainee Code:\s*([A-Z0-9\-]+/\d+)', text)
             venue_match = re.search(r'Venue & Address\s*Date & Time\s*(.*?)\s+(\d{2}/\d{2}/\d{4})\s+(\d{2}:\d{2}\s*[AP]M\s*to\s*\d{2}:\d{2}\s*[AP]M)', text, re.DOTALL)
             
-            # 5. Electoral and Bank Data (Added slashes '/' in EPIC Regex)
+            # 5. Electoral and Bank Data
+            # Explainer: The EPIC regex uses [A-Z0-9/] to ensure it captures formats with slashes like WB/39/271/225287.
             epic_match = re.search(r'EPIC No\.\s*-\s*([A-Z0-9/]+).*?Part No\.\s*-\s*(\d+).*?Sl\. No\.\s*-\s*(\d+)', text, re.DOTALL)
-            assembly_match = re.search(r'Permanent Assembly Constituency\s*-\s*([^\n]+)', text)
+            
+            # Explainer: The lookahead (?=\s*d\)|\n) fixes the "c)" issue. It stops capturing right before the next line or the "d)" starts.
+            assembly_match = re.search(r'Permanent Assembly Constituency\s*-\s*(.*?)(?=\s*d\)|\n)', text)
+            
             bank_match = re.search(r'A/c No\.\s*-\s*(\d+).*?IFSC\s*-\s*([A-Z0-9]+)', text, re.DOTALL)
             
+            # Explainer: If a valid name is found on the page, we proceed to compile the row.
             if name_match:
-                # Clean up multiline address spaces
+                # Explainer: Cleans up multi-line strings so they fit neatly into a single CSV cell.
                 venue_text = venue_match.group(1).strip().replace('\n', ', ') if venue_match else ""
                 office_text = office_match.group(1).strip().replace('\n', ' ') if office_match else ""
                 
+                # Explainer: Maps our extracted regex groups to the correct column headers.
                 row = {
                     "Name": name_match.group(1).strip(),
                     "Designation": name_match.group(2).strip(),
                     "Mobile Number": name_match.group(3).strip(),
+                    
+                    # Explainer: Here is where the Order No and Date are mapped to the dictionary!
                     "Order No": order_match.group(1).strip() if order_match else "",
                     "Order Date": order_match.group(2).strip() if order_match else "",
+                    
                     "Office Details": office_text,
                     "Post Status": office_match.group(2).strip() if office_match else "",
                     "Training Name": training_name_match.group(1).strip() if training_name_match else "",
@@ -74,8 +92,10 @@ def parse_pdf_to_csv(pdf_path, csv_path):
                     "Account Number": bank_match.group(1).strip() if bank_match else "",
                     "IFSC": bank_match.group(2).strip() if bank_match else ""
                 }
+                # Explainer: Appends the completed row to our master list.
                 data_rows.append(row)
                 
+    # Explainer: Opens data.csv in write mode and dumps all the rows using DictWriter.
     with open(csv_path, 'w', newline='', encoding='utf-8') as csv_file:
         writer = csv.DictWriter(csv_file, fieldnames=headers)
         writer.writeheader()
@@ -83,12 +103,15 @@ def parse_pdf_to_csv(pdf_path, csv_path):
         print(f"Successfully extracted {len(data_rows)} records to {csv_path}")
 
 if __name__ == "__main__":
+    # Explainer: The unique ID from your Google Drive shareable link.
     DRIVE_FILE_ID = '1iRD1LrKu_oOLPos0UEBSqzFFnjp7XFfJ'
     LOCAL_PDF_PATH = 'temp_appointment_letters.pdf'
     OUTPUT_CSV_PATH = 'data.csv'
     
+    # Explainer: Step 1 - Download the file from Drive.
     download_from_drive(DRIVE_FILE_ID, LOCAL_PDF_PATH)
     
+    # Explainer: Step 2 - Parse it and save to CSV, then delete the temporary PDF so it isn't pushed to GitHub.
     if os.path.exists(LOCAL_PDF_PATH):
         parse_pdf_to_csv(LOCAL_PDF_PATH, OUTPUT_CSV_PATH)
         os.remove(LOCAL_PDF_PATH)
