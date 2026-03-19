@@ -11,7 +11,6 @@ def download_from_drive(file_id, output_path):
     print("Download complete.")
 
 def parse_pdf_to_csv(pdf_path, csv_path):
-    # The updated headers, including Order No and Order Date
     headers = [
         "Name", "Designation", "Mobile Number", "Order No", "Order Date", 
         "Office Details", "Post Status", "Training Name", "Trainee Code", 
@@ -31,16 +30,24 @@ def parse_pdf_to_csv(pdf_path, csv_path):
                 continue
                 
             name_match = re.search(r'Name of.*?Officer\s+(.*?),\s*(.*?),\s*MOBILE NO:\s*(\d+)', text, re.IGNORECASE)
-            
-            # FIXED: Made the regex for Order No and Date much more robust against hidden PDF line breaks
             order_match = re.search(r'Order No:\s*(.*?)\s+Date:\s*([0-9\-]+)', text)
-            
             office_match = re.search(r'OFFICE DETAILS\s*-\s*(.*?)\nPost Status\s*-\s*([^\n]+)', text, re.DOTALL)
-            training_name_match = re.search(r'Training\n([^\n]+)\nTrainee Code:', text)
+            
+            # FIXED: Training Details
+            # This cleanly grabs whatever is between "Training Schedule" and "Trainee Code:"
+            training_name_match = re.search(r'Training Schedule\s*(?:Training)?\s*(.*?)\s*Trainee Code:', text, re.DOTALL)
             trainee_match = re.search(r'Trainee Code:\s*([A-Z0-9\-]+/\d+)', text)
-            venue_match = re.search(r'Venue & Address\s*Date & Time\s*(.*?)\s+(\d{2}/\d{2}/\d{4})\s+(\d{2}:\d{2}\s*[AP]M\s*to\s*\d{2}:\d{2}\s*[AP]M)', text, re.DOTALL)
+            
+            # FIXED: Venue Details 
+            # This reliably grabs the venue by looking between "Date & Time" and the actual "DD/MM/YYYY" date format
+            venue_match = re.search(r'Date & Time\s*(.*?)\s+(\d{2}/\d{2}/\d{4})\s+(\d{2}:\d{2}\s*[AP]M\s*to\s*\d{2}:\d{2}\s*[AP]M)', text, re.DOTALL)
+            
             epic_match = re.search(r'EPIC No\.\s*-\s*([A-Z0-9/]+).*?Part No\.\s*-\s*(\d+).*?Sl\. No\.\s*-\s*(\d+)', text, re.DOTALL)
-            assembly_match = re.search(r'Permanent Assembly Constituency\s*-\s*(.*?)(?=\s*d\)|\n)', text)
+            
+            # FIXED: Assembly Constituency
+            # Only allows uppercase letters, spaces, and brackets. Automatically ignores the lowercase "c)"
+            assembly_match = re.search(r'Permanent Assembly Constituency\s*-\s*([A-Z\s()]+)', text)
+            
             bank_match = re.search(r'A/c No\.\s*-\s*(\d+).*?IFSC\s*-\s*([A-Z0-9]+)', text, re.DOTALL)
             
             if name_match:
