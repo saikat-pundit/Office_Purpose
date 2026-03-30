@@ -98,7 +98,7 @@ def parse_pdf_to_csv(pdf_path, csv_path):
         print(f"Successfully extracted {len(data_rows)} records to {csv_path}")
 
 if __name__ == "__main__":
-    DRIVE_FILE_ID = '1OsPNRcSCUtL8wtzG80TiHmlq2UVSCq0v'
+    DRIVE_FILE_ID = '1nm-63zFkvVvj7yHEmd4PFI-QBH1mVzfE'
     LOCAL_PDF_PATH = 'temp_appointment_letters.pdf'
     OUTPUT_CSV_PATH = 'data.csv'
     
