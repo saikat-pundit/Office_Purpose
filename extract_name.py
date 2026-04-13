@@ -15,6 +15,9 @@ def extract_name_from_pdf():
     ticked_names = []
     reserve_names = []
     
+    # Regex pattern to find the exact role string
+    role_pattern = r'((?:1st|2nd|3rd|4th)?\s*(?:Polling|Presiding)\s*Officer)'
+    
     try:
         # Read the downloaded PDF
         with open(output, 'rb') as f:
@@ -26,31 +29,54 @@ def extract_name_from_pdf():
                 if not text:
                     continue
                 
-                # Check for Reserve (RSV) names
-                rsv_match = re.search(r'RSV[^a-zA-Z]*([A-Z\s]+?)[,\n]', text)
-                if rsv_match:
-                    reserve_names.append(rsv_match.group(1).strip())
-                    continue 
+                # 1. Check for Reserve (RSV) names
+                rsv_matches = re.finditer(r'RSV[\W_]*?([A-Z\s]{4,}?)(?=[,\n]|ASSISTANT)', text, re.IGNORECASE)
+                for match in rsv_matches:
+                    name = match.group(1).strip()
+                    # Search for the role in the next 150 characters to avoid crossing into the next person
+                    start_idx = match.end()
+                    search_area = text[start_idx:start_idx+150]
+                    role_match = re.search(role_pattern, search_area, re.IGNORECASE)
+                    
+                    if role_match:
+                        role = role_match.group(1).strip(" ()").title()
+                        reserve_names.append(f"{name} ({role})")
+                    else:
+                        reserve_names.append(name)
                 
-                # Regex 1: Looks for "√" followed by newlines/spaces, a number, a dot, and the Name.
-                matches = re.finditer(r'√\s*\n?\s*\d+\.\s*([A-Z\s]+?)(?=\n|ASSISTANT|PRIMARY|LIBRARIAN|OFFICE|HEAD TEACHER)', text, re.IGNORECASE)
-                found_ticked = False
-                for match in matches:
-                    ticked_names.append(match.group(1).strip())
-                    found_ticked = True
+                # 2. Regex for Ticked names (Pattern: √ 1. NAME)
+                matches_t1 = re.finditer(r'√[\s\n]*\d+\.[\s\n]*([A-Z\s]+?)(?=[,\n]|ASSISTANT|PRIMARY|LIBRARIAN|OFFICE|HEAD TEACHER)', text, re.IGNORECASE)
+                for match in matches_t1:
+                    name = match.group(1).strip()
+                    start_idx = match.end()
+                    search_area = text[start_idx:start_idx+150]
+                    role_match = re.search(role_pattern, search_area, re.IGNORECASE)
+                    
+                    if role_match:
+                        role = role_match.group(1).strip(" ()").title()
+                        ticked_names.append(f"{name} ({role})")
+                    else:
+                        ticked_names.append(name)
                 
-                if found_ticked:
-                    continue
-                
-                # Regex 2: Fallback in case it's perfectly inline like "3. AMIT GHOSH √"
-                matches_inline = re.finditer(r'\d+\.\s*([A-Z\s]+?)\s*√', text)
-                for match in matches_inline:
-                    ticked_names.append(match.group(1).strip())
+                # 3. Regex for Ticked names (Pattern: 1. NAME √)
+                matches_t2 = re.finditer(r'\d+\.[\s\n]*([A-Z\s]+?)[\s\n]*√', text, re.IGNORECASE)
+                for match in matches_t2:
+                    name = match.group(1).strip()
+                    start_idx = match.end()
+                    search_area = text[start_idx:start_idx+150]
+                    role_match = re.search(role_pattern, search_area, re.IGNORECASE)
+                    
+                    if role_match:
+                        # Fix title casing for numbers (e.g., "2Nd" -> "2nd")
+                        role = role_match.group(1).strip(" ()").title().replace("1St", "1st").replace("2Nd", "2nd").replace("3Rd", "3rd").replace("4Th", "4th")
+                        ticked_names.append(f"{name} ({role})")
+                    else:
+                        ticked_names.append(name)
                     
     except Exception as e:
         print(f"Error reading PDF: {e}")
 
-    # Remove any potential duplicates while keeping the original order
+    # Remove duplicates while keeping order
     def deduplicate(name_list):
         seen = set()
         final = []
@@ -65,7 +91,7 @@ def extract_name_from_pdf():
 
     print(f"Successfully extracted {len(final_ticked)} ticked names and {len(final_reserve)} reserve names.")
     
-    # Write to GitHub Step Summary to display in the Actions UI
+    # Write to GitHub Step Summary
     summary_file = os.environ.get('GITHUB_STEP_SUMMARY')
     if summary_file:
         with open(summary_file, 'a') as sf:
