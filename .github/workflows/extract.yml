@@ -1,5 +1,5 @@
 # .github/workflows/extract.yml
-name: Training Data
+name: Extract Polling Officers
 
 on:
   push:
@@ -23,11 +23,10 @@ jobs:
           pip install pdfplumber requests
 
       - name: Run extraction script
-        run: python Training.py
+        run: python Training.py > output.txt
 
       - name: Upload summary as artifact
         uses: actions/upload-artifact@v4
         with:
           name: polling-officers-summary
-          path: |
-            # Capture script output; redirect to file in previous step
+          path: output.txt
