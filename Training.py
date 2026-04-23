@@ -1,43 +1,52 @@
+# extract_polling_officers.py
 import re
 import sys
-from pathlib import Path
+import requests
+from io import BytesIO
 import pdfplumber
-import pandas as pd
 
-def extract_name_and_details(page_text):
-    name_pattern = r"Name of 1st Polling Officer\s*\n*(.*?)(?:\n|$)"
-    match = re.search(name_pattern, page_text, re.IGNORECASE)
-    if not match:
-        return None, None, None
-    name_line = match.group(1).strip()
-    name_clean = re.sub(r",\s*MOBILE NO:.*$", "", name_line).strip()
+PDF_URL = "https://drive.google.com/uc?export=download&id=1rd5eRjpcnYwfJUSfq84Rtl2M6R4Pw70Q"
 
-    mobile_match = re.search(r"MOBILE NO:\s*(\d+)", page_text)
-    epic_match = re.search(r"EPIC No\.\s*-\s*([A-Z0-9]+)", page_text)
-    mobile = mobile_match.group(1) if mobile_match else None
-    epic = epic_match.group(1) if epic_match else None
-    return name_clean, mobile, epic
+def download_pdf(url):
+    response = requests.get(url)
+    response.raise_for_status()
+    return BytesIO(response.content)
 
-def main(pdf_path, output_csv):
-    data = []
-    with pdfplumber.open(pdf_path) as pdf:
+def extract_name_from_page(text):
+    pattern = r"Name of 1st Polling Officer\s*\n([^\n,]+(?:[,\s][^\n,]+)*)"
+    match = re.search(pattern, text, re.IGNORECASE)
+    if match:
+        name = match.group(1).strip()
+        # Clean possible trailing comma or extra spaces
+        name = re.sub(r",\s*$", "", name)
+        return name
+    return None
+
+def main():
+    pdf_bytes = download_pdf(PDF_URL)
+    names = []
+    with pdfplumber.open(pdf_bytes) as pdf:
         for page_num, page in enumerate(pdf.pages, start=1):
             text = page.extract_text()
-            if not text:
-                continue
-            name, mobile, epic = extract_name_and_details(text)
-            data.append({
-                "Page": page_num,
-                "1st_Polling_Officer": name,
-                "Mobile": mobile,
-                "EPIC": epic
-            })
-    df = pd.DataFrame(data)
-    df.to_csv(output_csv, index=False)
-    print(f"Extracted {len(df)} records to {output_csv}")
+            if text:
+                name = extract_name_from_page(text)
+                if name:
+                    names.append((page_num, name))
+                else:
+                    names.append((page_num, "NOT FOUND"))
+            else:
+                names.append((page_num, "NO TEXT"))
+
+    # Print summary table
+    print("\nSummary Table of 1st Polling Officers")
+    print("=" * 60)
+    print(f"{'Page':<6} {'1st Polling Officer Name':<50}")
+    print("-" * 60)
+    for page, name in names:
+        print(f"{page:<6} {name:<50}")
+    print("=" * 60)
+    print(f"Total pages processed: {len(names)}")
+    print(f"Names extracted: {sum(1 for _, n in names if n not in ('NOT FOUND','NO TEXT'))}")
 
 if __name__ == "__main__":
-    if len(sys.argv) != 3:
-        print("Usage: python extract_polling_officers.py <pdf_file> <output_csv>")
-        sys.exit(1)
-    main(sys.argv[1], sys.argv[2])
+    main()
