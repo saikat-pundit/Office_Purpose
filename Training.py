@@ -12,13 +12,14 @@ def download_pdf(url):
     response.raise_for_status()
     return BytesIO(response.content)
 
-def extract_name_from_page(text):
-    pattern = r"Name of 1st Polling Officer\s*\n([^\n,]+(?:[,\s][^\n,]+)*)"
+def extract_name_only(text):
+    """
+    Extract just the name part before the first comma after 'Name of 1st Polling Officer'.
+    """
+    pattern = r"Name of 1st Polling Officer\s*\n([^\n,]+)"
     match = re.search(pattern, text, re.IGNORECASE)
     if match:
         name = match.group(1).strip()
-        # Clean possible trailing comma or extra spaces
-        name = re.sub(r",\s*$", "", name)
         return name
     return None
 
@@ -29,7 +30,7 @@ def main():
         for page_num, page in enumerate(pdf.pages, start=1):
             text = page.extract_text()
             if text:
-                name = extract_name_from_page(text)
+                name = extract_name_only(text)
                 if name:
                     names.append((page_num, name))
                 else:
@@ -39,12 +40,13 @@ def main():
 
     # Print summary table
     print("\nSummary Table of 1st Polling Officers")
-    print("=" * 60)
-    print(f"{'Page':<6} {'1st Polling Officer Name':<50}")
-    print("-" * 60)
+    print("=" * 55)
+    print(f"{'Page':<6} {'1st Polling Officer Name':<30} {'Role':<15}")
+    print("-" * 55)
     for page, name in names:
-        print(f"{page:<6} {name:<50}")
-    print("=" * 60)
+        role = "1st Polling Officer" if name != "NOT FOUND" and name != "NO TEXT" else ""
+        print(f"{page:<6} {name:<30} {role:<15}")
+    print("=" * 55)
     print(f"Total pages processed: {len(names)}")
     print(f"Names extracted: {sum(1 for _, n in names if n not in ('NOT FOUND','NO TEXT'))}")
 
