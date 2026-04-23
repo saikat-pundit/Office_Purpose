@@ -5,7 +5,7 @@ import os
 
 def extract_name_from_pdf():
     # Google Drive file ID from your link
-    file_id = '1jDoaHn-F4u5GF952U1t5sYcHYyg58_ke'
+    file_id = '1rd5eRjpcnYwfJUSfq84Rtl2M6R4Pw70Q'
     url = f'https://drive.google.com/uc?id={file_id}'
     output = 'appointment_letter.pdf'
     
