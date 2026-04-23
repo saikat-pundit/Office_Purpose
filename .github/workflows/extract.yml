@@ -1,5 +1,5 @@
 # .github/workflows/extract.yml
-name: Extract Polling Officers
+name: Training Data
 
 on:
   push:
